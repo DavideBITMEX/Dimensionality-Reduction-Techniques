@@ -1,5 +1,5 @@
 ---
-title: "PCA Analysis of Employment Data (2021-2023)"
+title: "Comparative Analysis of Dimensionality Reduction Techniques on Employment Data (2021-2023): PCA, MDS, t-SNE and UMAP"
 author: "Davide Bittelli"
 date: "December 8, 2024"
 output: html_document
