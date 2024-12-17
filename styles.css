@@ -1,0 +1,186 @@
+/* General body styling */
+body {
+  font-family: Arial, sans-serif;
+  line-height: 1.6;
+  color: #333;
+  background-color: #f9f9f9;
+}
+
+/* Header styling */
+h1, h2, h3 {
+  color: #003399;
+  font-weight: bold;
+}
+
+/* Subheading styling */
+h3 {
+  color: #555555;
+}
+
+/* Links styling */
+a {
+  color: #003399;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* Horizontal line styling */
+hr {
+  border-top: 2px solid lightgrey;
+  margin: 20px 0;
+}
+
+.main-container {
+  max-width: 100% !important;
+  padding-right: 50px;
+}
+
+/* Logo container styling */
+.logo-container {
+  text-align: center;       /* Center the image horizontally */
+  margin-bottom: 0px;      /* Remove space between the logo and the title */
+  margin-left: 0px;
+}
+
+/* Logo styling */
+.logo {
+  width: 280px;             /* Adjust the width to your preference */
+  height: auto;
+}
+
+/* Title block styling */
+.title-block {
+  display: flex;              /* Arrange children in a row */
+  align-items: center;        /* Vertically align the logo and text */
+  gap: 20px;                  /* Add space between the logo and the text */
+  text-align: left;       /* Center-align all text in the title block */
+  margin-bottom: 20px;
+}
+
+/* Title text styling */
+.title-text h1 {
+  display: flex;
+  flex-direction: column;     /* Stack the title, author, and date vertically */
+  justify-content: center;    /* Center vertically within the available space */
+}
+
+.title-text h2 {
+  margin: 0;
+  margin-top: 10px;
+  color: #003399;
+}
+
+.title-text h3 {
+  margin: 0;
+  margin-top: 10px;
+  color: #555555;
+}
+
+.title-text p {
+  margin: 0;
+  margin-top: 10px;
+  color: #777777;
+}
+
+/* Table styling */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 20px 0;
+}
+
+table th {
+  background-color: #003399;
+  color: #fff;
+  padding: 10px;
+  text-align: left;
+}
+
+table td {
+  padding: 10px;
+  border-bottom: 1px solid #ddd;
+}
+
+/* Code block styling */
+pre {
+  background-color: #f4f4f4;
+  padding: 10px;
+  border-left: 5px solid #003399;
+  overflow-x: auto;
+}
+
+/* Blockquote styling */
+blockquote {
+  border-left: 5px solid #FFCC00;
+  padding: 10px 20px;
+  margin: 20px 0;
+  background-color: #fff3cd;
+  color: #856404;
+}
+
+/* Button styling */
+button {
+  background-color: #003399;
+  color: white;
+  padding: 10px 20px;
+  border: none;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+button:hover {
+  background-color: #002266;
+}
+
+/* General TOC Styling */
+.tocify {
+  max-width: 100% !important;
+  border-right: 2px solid #003399;  /* Subtle blue border */
+  padding: 10px;                    /* Add consistent padding */
+}
+
+/* TOC Header Styling */
+.tocify .tocify-header {
+  color: #003399;                   /* EU Blue for the header */
+  font-size: 1.1em;
+  font-weight: bold;
+  margin-bottom: 8px;               /* Spacing below the header */
+}
+
+/* TOC Item Styling */
+.tocify .tocify-item {
+  color: #003399;                   /* EU Blue for TOC items */
+  background-color: #f9f9f9;
+  font-size: 1em;
+  padding: 5px 0;                   /* Add vertical spacing */
+  transition: color 0.2s ease;      /* Smooth transition for color changes */
+}
+
+/* Hover Effect for TOC Items */
+.tocify .tocify-item:hover {
+  color: #FFCC00;                   /* Yellow on hover for contrast */
+  background-color: #003399;
+  text-decoration: none;            /* Remove underline for a cleaner look */
+}
+
+/* Add a header only at the top of the TOC */
+.tocify::before {
+  content: "Table of contents:";           /* Set the desired TOC header text */
+  display: block;
+  font-size: 1.4em;              /* Adjust the font size */
+  font-weight: bold;             /* Make it bold */
+  color: #003399;                /* Use EU Blue for the header */
+  margin-bottom: 10px;           /* Add spacing below the header */
+  text-align: left;              /* Align the header to the left */
+}
+
+/* Style the div to look like an h1 */
+.custom-h1 {
+  font-size: 2em;         /* Match h1 font size */
+  font-weight: bold;      /* Match h1 font weight */
+  color: #003399;         /* EU Blue color */
+  margin: 0;              /* Remove default margin */
+}

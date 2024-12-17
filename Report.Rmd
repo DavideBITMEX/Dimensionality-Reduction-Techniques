@@ -1,0 +1,830 @@
+---
+output:
+  html_document:
+    includes:
+      before_body: "header.html"
+    css: "styles.css"
+    toc: true
+    toc_depth: 2
+    toc_float: 
+      smooth_scroll: true
+    number_sections: true
+    highlight: tango
+    # code_folding: hide   # This collapses the code chunks by default
+---
+
+# Introduction
+
+This report presents a **Principal Component Analysis (PCA)** of
+employment data from Eurostat. The goal is to:
+
+1.  **Identify patterns and relationships** between countries based on
+    employment statistics for different citizen categories.
+2.  **Reduce dimensionality** for easier visualization and
+    interpretation.
+3.  **Determine the contributions** of each variable (citizen category)
+    to the principal components.
+4.  **Visualize countries' similarities and differences** in employment
+    patterns.
+
+------------------------------------------------------------------------
+
+# Loading necessary Libraries
+
+Loading the necessary libraries for data manipulation, analysis, and
+visualization.
+
+```{r load-libraries, message=FALSE, warning=FALSE}
+# Load necessary libraries
+library(tidyverse)     
+library(eurostat)      
+library(FactoMineR)   
+library(factoextra)   
+library(ggplot2)
+library(dplyr)
+library(forcats)
+library(tidyverse)
+library(lubridate)
+library(plotly)
+library(scales)  
+library(patchwork) 
+library(gridExtra)  
+library(highcharter)
+library(knitr)
+library(kableExtra)
+library(htmltools)
+```
+
+------------------------------------------------------------------------
+
+# Data Import and Exploration
+
+The `lfsa_egan` dataset was obtained from [EUROSTAT’s official website](https://ec.europa.eu/eurostat/databrowser/explore/all/popul?lang=en&subtheme=labour.employ.lfsa.lfsa_emp&display=list&sort=category&extractionId=lfsa_egan). This dataset belongs to the *Labour Force Survey (LFS)* and contains annual employment data categorized by different demographics and economic dimensions. <br>
+- **Dataset**: 496671 observations and 8 variables. <br>
+- **Types of variables**: it mainly contains categorical variables and one numerical variable.
+
+```{r setup, message=FALSE, warning=FALSE, class.source = 'fold-show'}
+data <- get_eurostat("lfsa_egan")
+```
+
+In order to have a better understanding of the dataset, a brief description for each variable and the corresponding unique values are provided.
+
+```{r echo=TRUE}
+# Sample data frame
+df <- data.frame(
+  Variable = c(
+    "TIME_PERIOD", "geo", "citizen", "age", "unit",
+    "sex", "freq", "values"
+  ),
+  Description = c(
+    "Sampling year",
+    "Geopolitical entity",
+    "Country of citizienship",
+    "Age ranges",
+    "Measurement's unit for employment",
+    "Gender",
+    "Sampling frequency",
+    "Values"
+  ),
+  Type = c("date", "chr", "chr", "chr", "chr", "chr", "chr", "num"),
+  Unique_values = c(
+    paste0("`", unique(data$TIME_PERIOD), "`", collapse = " "),
+    paste0("`", unique(data$geo), "`", collapse = " "), 
+    paste0("`", unique(data$citizen), "`", collapse = " "), 
+    paste0("`", unique(data$age), "`", collapse = " "), 
+    "`THS_PER` (Thousand persons)", 
+    "`F` (Female) `M` (Male) `T` (Total)", 
+    "`A` (Annual)", 
+    "`numerical values"
+  )
+)
+
+# Create and style the table
+kable(df, "html", escape = FALSE, col.names = c("Variable", "Description", "Type", "Unique_values")) %>%
+  kable_styling(
+    full_width = FALSE,
+    position = "center",
+    bootstrap_options = c("striped", "hover"),
+    font_size = 14
+  ) %>%
+  row_spec(0, bold = TRUE) %>%  # Make the header row bold
+  column_spec(1, bold = TRUE) %>%   # Make the first column (Variable) bold
+  scroll_box(width = "100%", height = "100%", fixed_thead	= FALSE)
+
+```
+
+------------------------------------------------------------------------
+
+# Trends over time
+
+To better understand how employment levels for different citizenship
+groups have changed over time (1995-2023) the following analysis was
+conducted, helping to identify noticeable trends or anomalies during the
+time period. The dataset was filtered, leading to a subset containing
+all observations for the **Working Age Population** (`Y15-64`) and
+including undifferentiated data for Females and Males.
+
+```{r, message=FALSE, warning=FALSE, out.width='100%'}
+# Filter data for working-age population (15-64) and 'Total' for sex
+working_age_data <- data %>%
+  filter(age == "Y15-64", sex == "T") %>%
+  mutate(
+    year = year(TIME_PERIOD),
+    employment_real = values * 1000  # Convert employment values to actual numbers
+  )
+
+# Group employment by year and citizenship
+time_trend <- working_age_data %>%
+  group_by(TIME_PERIOD, citizen) %>%
+  summarise(total_employment = sum(employment_real, na.rm = TRUE)) %>%
+  ungroup()
+
+# Create the Highcharter plot
+hchart <- highchart() %>%
+  hc_chart(type = "line") %>%
+  hc_title(text = "Employment Trends by Citizenship Group (1995-2023)") %>%
+  hc_subtitle(text = "Working Age: 15-64 | Females and Males together") %>%
+  hc_xAxis(
+    type = "datetime",
+    title = list(text = "Year"),
+    labels = list(format = "{value:%Y}")
+  ) %>%
+  hc_yAxis(
+    title = list(text = "Total Employment"),
+    labels = list(format = "{value:,}")
+  ) %>%
+  hc_tooltip(
+    shared = TRUE,
+    crosshairs = TRUE,
+    pointFormat = "<b>Citizen Group:</b> {series.name}<br><b>Total Employment:</b> {point.y:,.0f}<br>"
+  ) %>%
+  hc_colors(c(
+    "#003399",  # EU27_2020_FOR (Dark Blue)
+    "#DAA520",  # FOR (Goldenrod)
+    "#228B22",  # NAT (Forest Green)
+    "#00CED1",  # NEU27_2020_FOR (Dark Turquoise)
+    "#1E90FF",  # NRP (Dodger Blue)
+    "#9370DB",  # STLS (Medium Purple)
+    "#FF1493"   # TOTAL (Deep Pink)
+  )) %>%
+  hc_plotOptions(
+    series = list(marker = list(enabled = FALSE))
+  )
+
+# Add series for each citizenship group
+citizenship_groups <- unique(time_trend$citizen)
+
+for (citizen in citizenship_groups) {
+  citizen_data <- time_trend %>% filter(citizen == !!citizen)
+  
+  hchart <- hchart %>%
+    hc_add_series(
+      data = list_parse2(data.frame(
+        x = as.numeric(as.POSIXct(citizen_data$TIME_PERIOD)) * 1000,
+        y = citizen_data$total_employment
+      )),
+      name = citizen
+    )
+}
+
+# Define the event annotations
+event_annotations <- data.frame(
+  date = as.Date(c("2001-01-01", "2004-01-01", "2007-01-01", "2008-01-01", "2020-01-01"))
+  )
+
+# Add vertical dashed lines for each event annotation with hover tooltips
+plot_lines <- lapply(1:nrow(event_annotations), function(i) {
+  list(
+    color = "#084594",          # Dark blue for the line
+    width = 2,                  # Line thickness
+    value = as.numeric(as.POSIXct(event_annotations$date[i])) * 1000,
+    dashStyle = "Dash",         # Dashed line style
+    zIndex = 3,                 # Ensure lines are above the plot
+    label = list(
+      text = "",                # No static text
+      style = list(fontSize = "0px")  # Hide the label
+    )
+  )
+})
+
+# Add the plot lines to the Highcharter plot
+hchart <- hchart %>%
+  hc_xAxis(plotLines = plot_lines)
+
+# Enable exporting and display the plot
+hchart <- hchart %>%
+  hc_exporting(enabled = TRUE) %>%
+  hc_legend(enabled = TRUE)
+
+# Display the chart
+hchart
+```
+
+The dotted-blue lines represent relevant events that might have
+influenced the employment trend:
+
+-   **2001**: The combination of Euro adoption preparations, economic
+    growth, labour reforms, and anticipation of EU enlargement
+    contributed to the significant rise in employment levels recorded
+    in 2001. This was a period of optimism and structural change that
+    positively impacted employment across various sectors in the EU.
+-   **2004**: EU Enlargement saw a significant rise in employment
+    levels, particularly for native citizens and total employment.
+-   **2007**: Bulgaria & Romania Join the EU led to a continued increase
+    in employment levels.
+-   **2008**: Financial Crisis led to a sharp decline in employment
+    trends due to widespread business failures, reduced investments, and
+    economic contraction, resulting in significant job losses across
+    many sectors in the EU
+-   **2020**: COVID-19 Pandemic caused a slight dip in employment,
+    reflecting the economic disruption during this period.
+
+### Overall Employment Growth:
+
+Total Employment (`TOTAL`) shows a sharp increase between 2001 and 2007,
+stabilizing afterward. This increase coincides with the events following
+the Euro adoption preparations (1999-2002), the 2004 EU Enlargement and
+2007 accession of Bulgaria and Romania.
+
+### Native Employment:
+
+Employment of Native Citizens (`NAT`) follows a similar pattern to the
+total employment trend, meaning that they represent the majority of the
+employment. The growth stabilizes post-2007 and experiences a slight dip
+during the COVID-19 pandemic in 2020.
+
+### EU citizens working in other EU countries:
+
+Employment of EU citizens working in other EU countries
+(`EU27_2020_FOR`) shows a relatively stable trend with moderate growth
+over the period.
+
+### Non-EU foreign citizens:
+
+Employment of non-EU foreign citizens (`FOR`) exhibits a gradual but
+consistent increase, indicating the growing role of foreign labor in the
+EU economy.
+
+### No Response:
+
+No Response (`NRP`) category shows a drop after 2003, possibly showing
+the positive consequences of the 2004 EU Enlargement.
+
+------------------------------------------------------------------------
+
+# Gender-Based Employment Trends
+
+Two interactive plots were displayed to present employment levels by
+Gender over Time and across Countries.
+
+## Employment Levels by Gender for the Working Age Population (15-64) Over Time
+
+The following plot indicates the employment levels by Gender aged 15-64
+across all countries, excluding EU-wide aggregates (EU27_2020 and EA20).
+The data spans multiple years and provides insights into employment
+trends by gender.
+
+```{r, message=FALSE, warning=FALSE, out.width='100%'}
+# Filter the data for working age (Y15-64), Males (M), Females (F), and exclude EU27_2020 and EA20
+  filtered_data <- data %>%
+    filter(
+      age == "Y15-64",
+      sex %in% c("M", "F"),
+      !geo %in% c("EU27_2020", "EA20")
+    ) %>%
+    mutate(
+      year = year(TIME_PERIOD),
+      employment_real = values * 1000  # Convert employment values to actual numbers
+    )
+  
+  # Summarize employment by year and sex
+  summarized_data <- filtered_data %>%
+    group_by(year, sex) %>%
+    summarise(total_employment = sum(employment_real, na.rm = TRUE)) %>%
+    ungroup()
+  
+  # Create the Highcharter bar plot
+  hchart <- highchart() %>%
+    hc_chart(type = "column") %>%
+    hc_title(text = "Employment Levels by Gender for the Working Age Population (15-64) Over Time") %>%
+    hc_subtitle(text = "All countries (excluding EU aggregates EU27_2020 - EA20)") %>%
+    hc_xAxis(
+      categories = unique(summarized_data$year),
+      title = list(text = "Year"),
+      labels = list(rotation = 45)  # Rotate x-axis labels for readability
+    ) %>%
+    hc_yAxis(
+      title = list(text = "Total Employment"),
+      labels = list(format = "{value:,}")  # Format y-axis with commas
+    ) %>%
+    hc_plotOptions(column = list(grouping = TRUE)) %>%
+    hc_tooltip(shared = TRUE, pointFormat = "<b>{series.name}</b>: {point.y:,.0f}<br>") %>%
+    hc_add_series(
+      data = summarized_data %>% filter(sex == "M") %>% pull(total_employment),
+      name = "Male",
+      color = "#003399"
+    ) %>%
+    hc_add_series(
+      data = summarized_data %>% filter(sex == "F") %>% pull(total_employment),
+      name = "Female",
+      color = "#FFCC00"
+    ) %>%
+    hc_legend(enabled = TRUE) %>%
+    hc_exporting(enabled = TRUE)  # Enable export options
+  
+  # Display the chart
+  hchart
+```
+
+This visualization helps to identify patterns and trends in employment
+by gender over the years, highlighting differences and potential shifts
+in labor market participation for males and females. **Insert Comment
+here**
+
+## Employment Levels by Gender and Country (Working Age: 15-64)
+
+The following interactive plot allows users to select different years to
+observe how employment levels have changed over time across countries
+(including the aggregates `EA20` and `EU27_2020`) for the working
+popuation (15-64), providing insights into gender-specific employment
+trends and patterns.
+
+```{r, message=FALSE, warning=FALSE, out.width='100%'}
+
+# Filter the data for working age (Y15-64), Males (M), Females (F), and citizen TOTAL
+filtered_data <- data %>%
+  filter(
+    age == "Y15-64",
+    sex %in% c("M", "F"),
+    citizen == "TOTAL"
+  ) %>%
+  mutate(
+    year = year(TIME_PERIOD),
+    employment_real = values * 1000  # Convert employment values to actual numbers
+  )
+
+# Summarize employment by year, country, and sex
+summarized_data <- filtered_data %>%
+  group_by(year, geo, sex) %>%
+  summarise(total_employment = sum(employment_real, na.rm = TRUE)) %>%
+  ungroup()
+
+# Ensure all combinations of year, geo, and sex exist, filling missing ones with zero
+summarized_data <- summarized_data %>%
+  complete(year, geo, sex, fill = list(total_employment = 0))
+
+# Define the correct order of countries with EA20 and EU27_2020 first
+geo_levels <- c("EA20", "EU27_2020", setdiff(unique(summarized_data$geo), c("EA20", "EU27_2020")))
+
+# Apply the factor order to geo
+summarized_data$geo <- factor(summarized_data$geo, levels = geo_levels)
+
+# Create a highcharter plot with a dropdown for year selection
+years <- unique(summarized_data$year)
+
+# Initialize highchart
+hchart <- highchart() %>%
+  hc_chart(type = "column") %>%
+  hc_title(text = "Employment Levels by Gender and Country (Working Age: 15-64)") %>%
+  hc_subtitle(text = "Interactive Year Selection | Including EA20 and EU27_2020") %>%
+  hc_xAxis(
+    categories = levels(summarized_data$geo),
+    title = list(text = "Country"),
+    labels = list(
+      rotation = 45,
+      style = list(fontSize = "8px")
+    )
+  ) %>%
+  hc_yAxis(
+    title = list(text = "Total Employment"),
+    labels = list(format = "{value:,}")
+  ) %>%
+  hc_plotOptions(column = list(grouping = TRUE)) %>%
+  hc_tooltip(shared = TRUE, pointFormat = "<b>{series.name}</b>: {point.y:,.0f}<br>")
+
+# Add series for each year
+for (yr in years) {
+  year_data <- summarized_data %>% filter(year == yr)
+  
+  hchart <- hchart %>%
+    hc_add_series(
+      data = year_data %>% filter(sex == "M") %>% arrange(geo) %>% pull(total_employment),
+      name = paste0("Male - ", yr),
+      color = "#003399",
+      visible = ifelse(yr == min(years), TRUE, FALSE)
+    ) %>%
+    hc_add_series(
+      data = year_data %>% filter(sex == "F") %>% arrange(geo) %>% pull(total_employment),
+      name = paste0("Female - ", yr),
+      color = "#FFCC00",
+      visible = ifelse(yr == min(years), TRUE, FALSE)
+    )
+}
+
+# Add year selection dropdown and exporting options with a toggleable legend
+hchart <- hchart %>%
+  hc_exporting(enabled = TRUE) %>%
+  hc_legend(enabled = TRUE) %>%
+  hc_chart(events = list(
+    load = JS("
+      function() {
+        var chart = this;
+        var legendVisible = true;
+        var button = chart.renderer.button('Toggle Legend', 10, 10)
+          .on('click', function() {
+            legendVisible = !legendVisible;
+            chart.update({
+              legend: { enabled: legendVisible },
+              xAxis: {
+                labels: {
+                  style: {
+                    fontSize: '8px'
+                  },
+                  rotation: 45
+                }
+              }
+            });
+            // Adjust the chart margins dynamically
+            if (!legendVisible) {
+              chart.update({
+                chart: { marginRight: 50 }
+              });
+            } else {
+              chart.update({
+                chart: { marginRight: 150 }
+              });
+            }
+          })
+          .add();
+      }")
+  ))
+
+# Display the chart
+hchart
+```
+
+**Insert Comment here**
+
+------------------------------------------------------------------------
+
+# Employment's comparison by Country and Citizienship Category
+
+A comparative analysis eas conducted to explore how employment levels
+vary between different countries for specific citizenship categories.
+`EU27_2020` and `EA20` have been excluded because they would make the
+individual countries less comparable between eachother.
+
+For this analysis a subset was created from the initial dataset,
+including just the Working Population (`Y15-64`) and making no
+differentiation for genre (`T`). Some specific years were selected: -
+**2000**: Represents the early 2000s before major EU enlargements. -
+**2007**: Captures the effects after major EU enlargements. - **2010**:
+Captures employment trends post-2008 financial crisis. - **2023**:
+Reflects the latest available data, including post-COVID-19 recovery.
+
+Heatmaps were generated for each of these years and two comparisons were
+made.
+
+## Heatmaps Comparison - before and after the EU enlargements (2000 and 2007)
+
+Heatmaps for 2000 and 2007 were generated and compared to capture the
+differences in employment levels across countries **before** and
+**after** the **EU enlargements**.
+
+```{r, message=FALSE, warning=FALSE, out.width='100%'}
+  # Filter data for selected years and only 'Total' for sex and working-age population (15-64)
+  selected_years <- c("2000-01-01", "2007-01-01")
+  filtered_data <- data %>%
+    filter(
+      TIME_PERIOD %in% as.Date(selected_years),
+      sex == "T",
+      age == "Y15-64",
+      !geo %in% c("EU27_2020", "EA20")  # Exclude "EU27_2020" and "EA20"
+    )
+  
+  # Group employment by country, citizenship, and year
+  country_citizen_summary <- filtered_data %>%
+    group_by(geo, citizen, TIME_PERIOD) %>%
+    summarise(total_employment = sum(values, na.rm = TRUE))
+  
+  # Function to create a plotly heatmap for a specific year
+  create_plotly_heatmap <- function(year, showlegend = TRUE) {
+    df <- country_citizen_summary %>% filter(TIME_PERIOD == as.Date(year))
+    
+    # Multiply total_employment by 1,000 to reflect real values
+    df <- df %>% mutate(total_employment_real = total_employment * 1000)
+    
+    plot_ly(
+      data = df,
+      x = ~geo,
+      y = ~citizen,
+      z = ~total_employment_real,
+      type = "heatmap",
+      colors = colorRamp(c("#f0f9ff", "#084594")),
+      colorbar = list(
+        title = "<b>Employment</b>",
+        tickfont = list(size = 12),
+        titlefont = list(size = 14, family = "Arial")
+      ),
+      showscale = showlegend,   # Control legend display
+      zmin = 0, zmax = 50000000,   # Set consistent color scale limits
+      
+      # Custom hover text
+        hovertemplate = paste(
+          "<b>Country:</b> %{x}<br>",
+          "<b>Citizenship:</b> %{y}<br>",
+          "<b>Total Employment:</b> %{z}<br>",
+          "<extra></extra>"  # Removes default trace info
+        )
+    ) %>%
+      layout(
+        title = list(
+          #text = paste("<b>Employment by Country and Citizenship -", format(as.Date(year), "%Y"), "</b>"),
+          font = list(size = 18, family = "Arial"),
+          x = 0.5,  # Center the title
+          xanchor = "center"
+        ),
+        xaxis = list(
+          title = "<b>Country</b>",
+          tickangle = 45,
+          tickfont = list(size = 10),
+          titlefont = list(size = 14, family = "Arial")
+        ),
+        yaxis = list(
+          title = "<b>Citizenship Category</b>",
+          tickfont = list(size = 10),
+          titlefont = list(size = 14, family = "Arial")
+        ),
+        margin = list(t = 60, b = 60)  # Add padding to top and bottom margins
+      )
+  }
+  
+  # Create plotly heatmaps for each selected year
+  interactive_heatmap_2000 <- create_plotly_heatmap("2000-01-01", showlegend = TRUE)
+  interactive_heatmap_2007 <- create_plotly_heatmap("2007-01-01", showlegend = FALSE)
+
+  # Combine the interactive heatmaps vertically
+  combined_interactive_heatmaps <- subplot(
+    interactive_heatmap_2000,
+    interactive_heatmap_2007,
+    nrows = 2,
+    shareX = TRUE,
+    shareY = TRUE,
+    titleX = TRUE,
+    titleY = TRUE
+  ) %>%
+    layout(
+      annotations = list(
+        list(
+          text = "<b>Year: 2000 (before EU enlargements)</b>",
+          x = 0.5,
+          y = 1.06,
+          xref = "paper",
+          yref = "paper",
+          showarrow = FALSE,
+          font = list(size = 11, family = "Arial")
+        ),
+        list(
+          text = "<b>Year: 2007 (after EU enlargements)</b>",
+          x = 0.5,
+          y = 0.50,
+          xref = "paper",
+          yref = "paper",
+          showarrow = FALSE,
+          font = list(size = 11, family = "Arial")
+        )
+      ),
+      title = "<b>Employment Trends by Citizenship Category and Country (2000 vs 2007)</b>",
+      margin = list(l = 100, r = 50, t = 80, b = 100),
+      titlefont = list(size = 20, family = "Arial", color = "black")
+    )
+  
+  # Display the combined interactive heatmaps
+  combined_interactive_heatmaps
+```
+
+The heatmaps for the years **2000** and **2007** show notable variations
+in employment levels across different **EU countries** and **citizenship
+categories**. The color intensity represents employment levels, with
+**darker blue** indicating higher employment.
+
+### Year: 2000 (Before EU Enlargements)
+
+-   **Employment for nationals** (`NAT`) dominates in most countries,
+    reflecting a labor market primarily consisting of native citizens.
+-   **Lower employment levels for foreign-born categories**
+    (`EU27_2020_FOR` and `NEU27_2020_FOR`) are observed, as the European
+    Union had not yet expanded to include countries from Eastern Europe
+    (the 2004 and 2007 enlargements).
+-   The employment distribution is more concentrated in **Western
+    European countries** like **Germany** (`DE`), **France** (`FR`), and
+    the **UK**.
+
+### Year: 2007 (After EU Enlargements)
+
+-   **Noticeable increase in employment for foreign-born categories**
+    (`EU27_2020_FOR` and `NEU27_2020_FOR`), reflecting the impact of the
+    **2004 EU enlargement** (when 10 new countries joined the EU) and
+    anticipation of the **2007 enlargement** (including Bulgaria and
+    Romania).
+-   Employment growth in countries like **Germany** (`DE`), the **UK**,
+    and **Spain** (`ES`) suggests increased **labor migration** and
+    **workforce integration** of foreign-born citizens.
+-   Some **Eastern European countries** begin to show increased
+    employment for nationals and foreign-born categories, indicating the
+    effect of **free movement of workers** within the EU.
+
+### Key Insights
+
+-   **Impact of EU Enlargement**:\
+    The period between **2000 and 2007** shows the effects of **EU
+    enlargement**, with a rise in employment for foreign-born categories
+    due to increased migration and labor mobility within the EU.
+
+-   **Country-Specific Patterns**:
+
+    -   **Germany** (`DE`) and **France** (`FR`) maintain high
+        employment levels across both years, reflecting their strong
+        economies and capacity to integrate foreign workers.\
+    -   **Spain** (`ES`) shows increased employment for foreign-born
+        categories, consistent with the **construction boom** and
+        economic growth before the **2008 financial crisis**.
+
+-   **Labor Market Integration**:\
+    The increase in employment for foreign-born categories highlights
+    the **integration of migrants** into the workforce and the
+    importance of policies supporting labor mobility and inclusion.
+
+## Heatmaps Comparison - After 2 Important Crisis (2010 and 2023)
+
+Heatmaps for 2010 and 2023 were compared to capture the differences in
+employment levels across countries after 2 important crisis: **2008
+Financial Crisis** and **COVID-19 Pandemic**.
+
+```{r, message=FALSE, warning=FALSE, out.width='100%'}
+  # Filter data for selected years and only 'Total' for sex and working-age population (15-64)
+  selected_years <- c("2010-01-01", "2023-01-01")
+  filtered_data <- data %>%
+    filter(
+      TIME_PERIOD %in% as.Date(selected_years),
+      sex == "T",
+      age == "Y15-64",
+      !geo %in% c("EU27_2020", "EA20")  # Exclude "EU27_2020" and "EA20"
+    )
+  
+  # Group employment by country, citizenship, and year
+  country_citizen_summary <- filtered_data %>%
+    group_by(geo, citizen, TIME_PERIOD) %>%
+    summarise(total_employment = sum(values, na.rm = TRUE))
+  
+  # Function to create a plotly heatmap for a specific year
+  create_plotly_heatmap <- function(year, showlegend = TRUE) {
+    df <- country_citizen_summary %>% filter(TIME_PERIOD == as.Date(year))
+    
+    # Multiply total_employment by 1,000 to reflect real values
+    df <- df %>% mutate(total_employment_real = total_employment * 1000)
+    
+    plot_ly(
+      data = df,
+      x = ~geo,
+      y = ~citizen,
+      z = ~total_employment_real,
+      type = "heatmap",
+      colors = colorRamp(c("#f0f9ff", "#084594")),
+      colorbar = list(
+        title = "<b>Employment</b>",
+        tickfont = list(size = 12),
+        titlefont = list(size = 14, family = "Arial")
+      ),
+      showscale = showlegend,   # Control legend display
+      zmin = 0, zmax = 50000000,   # Set consistent color scale limits
+      
+      # Custom hover text
+        hovertemplate = paste(
+          "<b>Country:</b> %{x}<br>",
+          "<b>Citizenship:</b> %{y}<br>",
+          "<b>Total Employment:</b> %{z}<br>",
+          "<extra></extra>"  # Removes default trace info
+        )
+    ) %>%
+      layout(
+        title = list(
+          #text = paste("<b>Employment by Country and Citizenship -", format(as.Date(year), "%Y"), "</b>"),
+          font = list(size = 18, family = "Arial"),
+          x = 0.5,  # Center the title
+          xanchor = "center"
+        ),
+        xaxis = list(
+          title = "<b>Country</b>",
+          tickangle = 45,
+          tickfont = list(size = 10),
+          titlefont = list(size = 14, family = "Arial")
+        ),
+        yaxis = list(
+          title = "<b>Citizenship Category</b>",
+          tickfont = list(size = 10),
+          titlefont = list(size = 14, family = "Arial")
+        ),
+        margin = list(t = 60, b = 60)  # Add padding to top and bottom margins
+      )
+  }
+  
+  # Create plotly heatmaps for each selected year
+  interactive_heatmap_2010 <- create_plotly_heatmap("2010-01-01", showlegend = TRUE)
+  interactive_heatmap_2023 <- create_plotly_heatmap("2023-01-01", showlegend = FALSE)
+
+  # Combine the interactive heatmaps vertically
+  combined_interactive_heatmaps <- subplot(
+    interactive_heatmap_2010,
+    interactive_heatmap_2023,
+    nrows = 2,
+    shareX = TRUE,
+    shareY = TRUE,
+    titleX = TRUE,
+    titleY = TRUE
+  ) %>%
+    layout(
+      annotations = list(
+        list(
+          text = "<b>Year: 2010 (after 2008 Financial Crisis)</b>",
+          x = 0.5,
+          y = 1.06,
+          xref = "paper",
+          yref = "paper",
+          showarrow = FALSE,
+          font = list(size = 11, family = "Arial")
+        ),
+        list(
+          text = "<b>Year: 2023 (after COVID-19 Pandemic)</b>",
+          x = 0.5,
+          y = 0.50,
+          xref = "paper",
+          yref = "paper",
+          showarrow = FALSE,
+          font = list(size = 11, family = "Arial")
+        )
+      ),
+      title = "<b>Employment Trends by Citizenship Category and Country (2010 vs 2023)</b>",
+      margin = list(l = 100, r = 50, t = 80, b = 100),
+      titlefont = list(size = 20, family = "Arial", color = "black")
+    )
+  
+  # Display the combined interactive heatmaps
+  combined_interactive_heatmaps
+```
+
+The heatmaps for the years **2010** and **2023** show variations in
+employment levels across different **EU countries** and **citizenship
+categories**. The color intensity represents employment levels, with
+**darker blue** indicating higher employment.
+
+### Year: 2010 (After 2008 Financial Crisis)
+
+-   **Employment for nationals** (`NAT`) remains prominent, but declines
+    are observed in some countries due to the impact of the **2008
+    financial crisis**.
+-   **Lower employment levels for foreign-born categories**
+    (`EU27_2020_FOR` and `NEU27_2020_FOR`), reflecting the economic
+    downturn's disproportionate impact on migrant workers.
+-   Employment growth is still concentrated in countries like
+    **Germany** (`DE`) and **France** (`FR`), which were more resilient
+    to the crisis.
+-   **Southern European countries** such as **Spain** (`ES`) and
+    **Italy** (`IT`) show noticeable declines, consistent with the
+    severe economic challenges they faced during this period.
+
+### Year: 2023 (After COVID-19 Pandemic)
+
+-   **Recovery in employment levels** for both nationals (`NAT`) and
+    foreign-born categories (`EU27_2020_FOR` and `NEU27_2020_FOR`),
+    indicating the labor market rebound after the **COVID-19 pandemic**.
+-   Significant employment growth for foreign-born categories in
+    countries like **Germany** (`DE`), **France** (`FR`), and **Spain**
+    (`ES`), suggesting a return to pre-pandemic trends and increased
+    workforce integration.
+-   **Eastern European countries** show varying employment levels,
+    reflecting ongoing economic adjustments and workforce mobility
+    within the EU.
+-   **Missing Values** appear for some Eastern countries (e.g.Ukraine
+    `UK`, Turkey `TR`, North Macedonia `MK`), probably due to the
+    ongoing conflict between Russia and Ukraine.
+
+### Key Insights
+
+-   **Impact of Economic Shocks**:\
+    The period between **2010 and 2023** highlights the effects of two
+    major economic shocks:
+    -   The **2008 financial crisis** led to reduced employment,
+        particularly for foreign-born categories.
+    -   The **COVID-19 pandemic** caused temporary disruptions but was
+        followed by a recovery in 2023.
+-   **Country-Specific Patterns**:
+    -   **Germany** (`DE`) and **France** (`FR`) continue to show high
+        employment levels, demonstrating economic resilience and
+        effective labor policies.
+    -   **Spain** (`ES`) shows employment fluctuations, with a decline
+        post-2008 and recovery post-pandemic.
+-   **Labor Market Integration**:\
+    The rebound in employment for foreign-born categories in **2023**
+    underscores the importance of **migration policies** and **workforce
+    integration programs** in sustaining labor markets.
