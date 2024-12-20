@@ -1,4 +1,4 @@
-# EU Employment Analysis (EUROSTAT Data)
+🇪🇺# EU Employment Analysis (EUROSTAT Data)
 
 ## [Link to the Report](https://davidebittelli.com/wp-content/uploads/2024/12/EmploymentAnalysisEUROSTAT.html)
 
