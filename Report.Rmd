@@ -615,7 +615,7 @@ generate_map <- function(year_selected) {
               joinBy = c("iso-a2", "geo"),  
               name = "Employment Rate",  
               value = "values",  
-              tooltip = list(pointFormat = "{point.value}%"),  
+              tooltip = list(pointFormat = "{point.name}:{point.value}%"),  
               dataLabels = list(
                 enabled = TRUE, 
                 format = "{point.value}%"  # Display name and value with "%"
