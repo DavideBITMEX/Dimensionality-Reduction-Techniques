@@ -14,9 +14,9 @@ output:
     # code_folding: hide   # This collapses the code chunks by default
 ---
 
-## Introduction
+# Introduction 
 This project provides an in-depth analysis of labor force statistics sourced from the Eurostat `lfsa_egan` dataset. The dataset includes a wealth of information on labor market participation, broken down by demographic factors such as *sex*, *age*, *citizenship*, and *geographical regions* across European countries. The goal is to explore how these factors influence employment trends over time and how they vary across different countries and regions.
-
+ 
 In addition to the statistical analysis, the project also includes a **geospatial analysis** of labor market trends for the year **2023**. This analysis uses interactive maps to visualize employment patterns across different European countries and regions.
 
 The analysis focuses on several key aspects, including the evolution of **Employment Trends**, with particular attention to the differences between citizenship groups, age categories, and genders. Additionally, the project explores employment disparities by gender, as well as the relationship between employment levels and both gender and citizenship categories.
